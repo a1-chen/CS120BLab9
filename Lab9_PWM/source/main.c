@@ -124,7 +124,7 @@ int TickFct_PlaySong(int state) {
 			state = PS_WAIT;
 			break;
 		case PS_WAIT:
-			if (playSong) {
+			if (~PINA & 0x01) {
 				playSong = 0;
 				currPos = 0;
 				currTime = 0;
@@ -134,7 +134,7 @@ int TickFct_PlaySong(int state) {
 			}
 			break;
 		case PS_PLAY:
-			if (currPos >= sizeof(notes)) {
+			if (currPos >= sizeof(notes) / sizeof(*notes)) {
 				state = PS_WAIT;
 				playSong = 0;
 			} else {
@@ -155,10 +155,11 @@ int TickFct_PlaySong(int state) {
 		case PS_START:
 			break;
 		case PS_WAIT:
-			set_PWM(0);
+			set_PWM(C4);
 			break;
 		case PS_PLAY:
-			set_PWM(notes[currPos]);
+			set_PWM(C5);
+			set_PWM(notes[1]);
 			break;
 		default:
 			set_PWM(0);
@@ -186,6 +187,7 @@ int TickFct_ButtonPress(int state) {
 				state = BP_PRESS;
 			} else {
 				state = BP_WAIT;
+				playSong = 0;
 			}
 			break;
 		default:
@@ -222,7 +224,7 @@ int main(void) {
 	tasks[i]->TickFct = &TickFct_ButtonPress;
 	
 	playSong = 1;
-	TimerSet(100);
+	TimerSet(1000);
 	TimerOn();
 	set_PWM(0);
 	PWM_on();	
