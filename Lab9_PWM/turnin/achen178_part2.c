@@ -1,7 +1,7 @@
-/*	Author: Aaron Chen
+/*	Author: Aaron Chen 
  *  Partner(s) Name: 
  *	Lab Section:
- *	Assignment: Lab 9  Exercise 3
+ *	Assignment: Lab 9  Exercise 2
  *	Exercise Description: [optional - include for your own benefit]
  *
  *	I acknowledge all content contained herein, excluding template or example
@@ -72,10 +72,10 @@ typedef struct task {
 	int (*TickFct)(int);
 } task;
 
-static task task1, task2;
-task *tasks[] = { &task1, &task2 };
+static task task1, task2, task3;
+task *tasks[] = { &task1, &task2, &task3 };
 const unsigned short tasksNum = sizeof(tasks) / sizeof(*tasks);
-const unsigned short tasksPeriod = 75;
+const unsigned short tasksPeriod = 100;
 
 void TimerISR() {
 	unsigned char i;
@@ -109,99 +109,133 @@ void TimerSet(unsigned long M) {
 #define A4 440.00
 #define B4 493.88
 #define C5 523.25
-const static double notes[] = { E4, D4, C4, 0, E4, D4, C4, 0, C4, 0, C4, 0, C4, 0, C4, 0, D4, 0, D4, 0, D4, 0, D4, E4, D4, C4, 0 };
-const static unsigned short times[] = { 4, 4, 4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4 };
-static unsigned char currPos = 0;
-static unsigned char currTime = 0;
-unsigned char playSong = 1;
+unsigned char currNote = 0;
+const static double notes[] = { C4, D4, E4, F4, G4, A4, B4, C5 };
+unsigned char playSound = 1;
 
-enum PS_States { PS_START, PS_WAIT, PS_PLAY };
-int TickFct_PlaySong(int state) {
-	switch (state) {
+enum PS_States { PS_START, PS_CTRL };
+int TickFct_PlaySound(int state) {
+	switch (state) { //transitions
 		case PS_START:
-			currPos = 0;
-			currTime = 0;
-			state = PS_WAIT;
+			state = PS_CTRL;
 			break;
-		case PS_WAIT:
-			if (playSong) {
-				playSong = 0;
-				currPos = 0;
-				currTime = 0;
-				state = PS_PLAY;
-			} else {
-				state = PS_WAIT;
-			}
-			break;
-		case PS_PLAY:
-			if (currPos >= sizeof(notes)) {
-				state = PS_WAIT;
-				playSong = 0;
-			} else {
-				if (currTime < times[currPos]) {
-					currTime++;
-				} else {
-					currTime = 0;
-					currPos++;
-				}
-				state = PS_PLAY;
-			}
+		case PS_CTRL:
+			state = PS_CTRL;
 			break;
 		default:
 			state = PS_START;
 			break;
 	}
-	switch (state) {
+	switch (state) { //state actions
 		case PS_START:
-			break;
-		case PS_WAIT:
 			set_PWM(0);
 			break;
-		case PS_PLAY:
-			set_PWM(notes[currPos]);
+		case PS_CTRL:
+			if (playSound) {
+				set_PWM(notes[currNote]);
+			} else {
+				set_PWM(0);
+			}
 			break;
 		default:
 			set_PWM(0);
 			break;
 	}
+	return state;
 }
 
-enum BP_States { BP_START, BP_WAIT, BP_PRESS };
-int TickFct_ButtonPress(int state) {
-	switch (state) {
-		case BP_START:
-			playSong = 0;
-			state = BP_WAIT;
+enum CN_States { CN_START, CN_WAIT, CN_UP, CN_DOWN };
+int TickFct_ChangeNote(int state) {
+	switch (state) { //transitions
+		case CN_START:
+			state = CN_WAIT;
 			break;
-		case BP_WAIT:
-			if (~PINA & 0x01) {
-				playSong = 1;
-				state = BP_PRESS;
+		case CN_WAIT:
+			if ((~PINA & 0x05) == 0x01) {
+				state = CN_UP;
+				if (currNote < 7) {
+					currNote++;
+				}
+			} else if ((~PINA & 0x05) == 0x04) {
+				state = CN_DOWN;
+				if (currNote > 0) {
+					currNote--;
+				}
 			} else {
-				state = BP_WAIT;
+				state = CN_WAIT;
 			}
 			break;
-		case BP_PRESS:
+		case CN_UP:
 			if (~PINA & 0x01) {
-				state = BP_PRESS;
+				state = CN_UP;
 			} else {
-				state = BP_WAIT;
+				state = CN_WAIT;
+			}
+			break;
+		case CN_DOWN:
+			if (~PINA & 0x04) {
+				state = CN_DOWN;
+			} else {
+				state = CN_WAIT;
 			}
 			break;
 		default:
-			state = BP_WAIT;
+			state = CN_START;
 			break;
 	}
-	switch (state) {
-		case BP_START:
+	switch (state) { //state actions
+		case CN_START:
+			currNote = 0;
 			break;
-		case BP_WAIT:
+		case CN_WAIT:
 			break;
-		case BP_PRESS:
+		case CN_UP:
+			break;
+		case CN_DOWN:
 			break;
 		default:
 			break;
 	}
+	return state;
+}
+
+enum PP_States { PP_START, PP_WAIT, PP_PRESS };
+int TickFct_PlayPause(int state) {
+	switch (state) {
+		case PP_START:
+			playSound = 1;
+			state = PP_WAIT;
+			break;
+		case PP_WAIT:
+			if (~PINA & 0x02) {
+				state = PP_PRESS;
+				playSound = !playSound;
+			} else {
+				state = PP_WAIT;
+			}
+			break;
+		case PP_PRESS:
+			if (~PINA & 0x02) {
+				state = PP_PRESS;
+			} else {
+				state = PP_WAIT;
+			}
+			break;
+		default:
+			state = PP_START;
+			break;
+	}
+	switch (state) {
+		case PP_START:
+			break;
+		case PP_WAIT:
+			break;
+		case PP_PRESS:
+			break;
+		default:
+			break;
+	}
+	return state;
 }
 
 
@@ -212,19 +246,23 @@ int main(void) {
     /* Insert your solution below */
 	unsigned char i = 0;
 	tasks[i]->state = PS_START;
-	tasks[i]->period = tasksPeriod;
+	tasks[i]->period = 100;
 	tasks[i]->elapsedTime = 0;
-	tasks[i]->TickFct = &TickFct_PlaySong;
+	tasks[i]->TickFct = &TickFct_PlaySound;
 	i++;
-	tasks[i]->state = BP_START;
-	tasks[i]->period = tasksPeriod;
+	tasks[i]->state = CN_START;
+	tasks[i]->period = 100;
 	tasks[i]->elapsedTime = 0;
-	tasks[i]->TickFct = &TickFct_ButtonPress;
-	
-	playSong = 1;
+	tasks[i]->TickFct = &TickFct_ChangeNote;
+	i++;
+	tasks[i]->state = PP_START;
+	tasks[i]->period = 100;
+	tasks[i]->elapsedTime = 0;
+	tasks[i]->TickFct = &TickFct_PlayPause;
+
 	TimerSet(100);
 	TimerOn();
-	set_PWM(0);
+	set_PWM(C4);
 	PWM_on();	
 	while (1) { }
 	return 1;
